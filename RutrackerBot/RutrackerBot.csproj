@@ -17,4 +17,10 @@
       </Content>
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="BencodeNET" Version="5.0.0" />
+      <PackageReference Include="RuTracker.Client" Version="0.8.0" />
+      <PackageReference Include="Telegram.Bot" Version="19.0.0" />
+    </ItemGroup>
+
 </Project>
