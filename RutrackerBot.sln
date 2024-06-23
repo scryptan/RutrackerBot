@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RutrackerBot", "RutrackerBot\RutrackerBot.csproj", "{A710E55E-05D8-4F6B-9206-B3251D14AA4C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A710E55E-05D8-4F6B-9206-B3251D14AA4C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A710E55E-05D8-4F6B-9206-B3251D14AA4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A710E55E-05D8-4F6B-9206-B3251D14AA4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A710E55E-05D8-4F6B-9206-B3251D14AA4C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
