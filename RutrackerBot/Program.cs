@@ -29,9 +29,19 @@ var reg = PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ =>
     // ReSharper disable once AccessToDisposedClosure
     cts.Cancel();
 });
+Console.CancelKeyPress += (sender, eventArgs) =>
+{
+    eventArgs.Cancel = true;
+    // ReSharper disable once AccessToDisposedClosure
+    cts.Cancel();
+};
 
 Console.WriteLine($"Start listening for @{me.Username}");
-Console.ReadLine();
 
-// Send cancellation request to stop bot
-cts.Cancel();
+try
+{
+    await Task.Delay(Timeout.Infinite, cts.Token);
+}
+catch (TaskCanceledException)
+{
+}
