@@ -1,5 +1,6 @@
 using System.Text;
 using BencodeNET.Torrents;
+using ByteSizeLib;
 using RuTracker.Client.Model.SearchTopics.Request;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
@@ -48,7 +49,7 @@ public class Handlers
                 chatId: chatId,
                 text: $"Напиши мне что хочешь найти",
                 cancellationToken: cancellationToken);
-            
+
             return;
         }
 
@@ -67,6 +68,23 @@ public class Handlers
             sb.AppendLine($"{topic.Title} | {topic.Author?.Name} | {topic.TopicStatus}");
             sb.AppendLine(
                 $"Сиды: {topic.SeedsCount} | Личи: {topic.LeechesCount} | Скачивания: {topic.DownloadsCount}");
+            var size = ByteSize.FromBytes(topic.SizeInBytes);
+
+            string sizeText;
+            if (size.GibiBytes >= 1)
+            {
+                sizeText = $"{size.GibiBytes:F}GB";
+            }
+            else if (size.MebiBytes >= 1)
+            {
+                sizeText = $"{size.MebiBytes:F}MB";
+            }
+            else
+            {
+                sizeText = $"{size.KibiBytes:F}KB";
+            }
+
+            sb.AppendLine($"Размер: {sizeText}");
             sb.AppendLine($"/download@{topic.Id}\n");
         }
 
