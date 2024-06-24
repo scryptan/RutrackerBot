@@ -27,26 +27,13 @@ public class Handlers
 
         Console.WriteLine($"Received a '{messageText}' message in chat {chatId}.");
 
-        if (messageText.StartsWith("/download@"))
+        var isCommand = messageText.StartsWith('/');
+        if (isCommand)
         {
-            var topicStr = messageText.Replace("/download@", String.Empty).Trim();
-            if (int.TryParse(topicStr, out var topicId))
-            {
-                await ProcessDownloadCommand(botClient, chatId, topicId, cancellationToken);
-            }
-            else
-            {
-                await SendTextMessage($"Не получилось найти топик: {topicStr}");
-            }
-
+            await ProcessCommands(botClient, messageText, chatId, cancellationToken);
             return;
         }
 
-        if (messageText.StartsWith("/start"))
-        {
-            await SendTextMessage($"Напиши мне что хочешь найти");
-            return;
-        }
 
         var client = RutrackerSession.Instance.Client;
 
@@ -80,30 +67,84 @@ public class Handlers
             }
 
             sb.AppendLine($"Размер: {sizeText}");
+            sb.AppendLine($"/show@{topic.Id}");
             sb.AppendLine($"/download@{topic.Id}\n");
 
             if (sb.Length > 3000)
             {
-                await SendTextMessage(
-                    $"*Найдено {resp.Found} топиков, отображается первые {MaxTopicsCount} по сидам*\n\n{EscapeString(sb.ToString())}");
+                await SendFoundMessage();
                 sb.Clear();
             }
         }
 
         if (sb.Length > 0)
-            await SendTextMessage(
-                $"*Найдено {resp.Found} топиков, отображается первые {MaxTopicsCount} по сидам*\n\n{EscapeString(sb.ToString())}");
+            await SendFoundMessage();
 
-        async Task SendTextMessage(string localText)
+        async Task SendFoundMessage()
         {
-            await botClient.SendTextMessageAsync(
-                chatId: chatId,
-                text: localText,
-                parseMode: ParseMode.MarkdownV2,
-                cancellationToken: cancellationToken);
+            await SendTextMessage(botClient,
+                $"*Найдено {resp.Found} топиков, отображается первые {MaxTopicsCount} по сидам*\n\n{EscapeString(sb.ToString())}",
+                chatId, cancellationToken);
         }
     }
 
+    private static async Task ProcessCommands(ITelegramBotClient botClient, string messageText, long chatId,
+        CancellationToken cancellationToken)
+    {
+        if (messageText.StartsWith("/download@"))
+        {
+            if (TryGetCommandTopic(messageText, out var topicId))
+            {
+                await ProcessDownloadCommand(botClient, chatId, topicId, cancellationToken);
+            }
+            else
+            {
+                await SendTextMessage(botClient, "Не получилось найти такой топик", chatId, cancellationToken);
+            }
+
+            return;
+        }
+
+        if (messageText.StartsWith("/show@"))
+        {
+            if (TryGetCommandTopic(messageText, out var topicId))
+            {
+                await ProcessShowCommand(botClient, chatId, topicId, cancellationToken);
+            }
+            else
+            {
+                await SendTextMessage(botClient, "Не получилось найти такой топик", chatId, cancellationToken);
+            }
+
+            return;
+        }
+
+        if (messageText.StartsWith("/start"))
+        {
+            await SendTextMessage(botClient, "Напиши мне что хочешь найти", chatId, cancellationToken);
+            return;
+        }
+
+
+        await SendTextMessage(botClient, "Какая-то неизвестная команда", chatId, cancellationToken);
+    }
+
+    private static async Task SendTextMessage(ITelegramBotClient botClient, string messageText, long chatId,
+        CancellationToken cancellationToken)
+    {
+        await botClient.SendTextMessageAsync(
+            chatId: chatId,
+            text: messageText,
+            parseMode: ParseMode.MarkdownV2,
+            cancellationToken: cancellationToken);
+    }
+
+    private static bool TryGetCommandTopic(string messageText, out int topicId)
+    {
+        var topicStr = messageText.Split('@', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Last().Trim();
+        return int.TryParse(topicStr, out topicId);
+    }
 
     private static string EscapeString(string input)
     {
@@ -121,8 +162,7 @@ public class Handlers
     private static async Task ProcessDownloadCommand(ITelegramBotClient botClient, long chatId, int topicId,
         CancellationToken cancellationToken)
     {
-        var client = RutrackerSession.Instance.Client;
-        var content = await client
+        var content = await RutrackerSession.Instance.Client
             .GetTopicTorrentFile(topicId, cancellationToken);
 
         var parser = new TorrentParser(TorrentParserMode.Strict);
@@ -132,6 +172,57 @@ public class Handlers
             chatId: chatId,
             InputFile.FromStream(new MemoryStream(content), $"{torrent.DisplayName}_[rutracker {topicId}].torrent"),
             cancellationToken: cancellationToken);
+    }
+
+    private static async Task ProcessShowCommand(ITelegramBotClient botClient, long chatId, int topicId,
+        CancellationToken cancellationToken)
+    {
+        var content = await RutrackerSession.Instance.Client
+            .GetTopicTorrentFile(topicId, cancellationToken);
+
+        var parser = new TorrentParser(TorrentParserMode.Strict);
+        var torrent = parser.Parse(new MemoryStream(content));
+
+        var sb = new StringBuilder($"{torrent.DisplayName}\n");
+
+
+        if (torrent.Files != null)
+        {
+            foreach (var filePath in torrent.Files
+                         .Select(ToDescription)
+                         .Distinct()
+                         .OrderBy(x => x.FilePath.Length)
+                         .Take(30)
+                     )
+            {
+                sb.AppendLine($"- {filePath}");
+                if (sb.Length > 3000)
+                {
+                    await botClient.SendTextMessageAsync(
+                        chatId: chatId,
+                        text: EscapeString(sb.ToString()),
+                        parseMode: ParseMode.MarkdownV2,
+                        cancellationToken: cancellationToken);
+                    sb.Clear();
+                }
+            }
+        }
+
+        await botClient.SendTextMessageAsync(
+            chatId: chatId,
+            text: $"*Показаны первые 30 файлов*\n{EscapeString(sb.ToString())}",
+            parseMode: ParseMode.MarkdownV2,
+            cancellationToken: cancellationToken);
+
+        TorrentFileDescription ToDescription(MultiFileInfo fileInfo)
+        {
+            var path = fileInfo.FullPath.Split('/',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (path.Length > 1)
+                return new TorrentFileDescription(path[0], FileType.Folder);
+
+            return new TorrentFileDescription(fileInfo.FullPath, FileType.File);
+        }
     }
 
     public static Task HandlePollingErrorAsync(ITelegramBotClient thisBotClient, Exception exception,
