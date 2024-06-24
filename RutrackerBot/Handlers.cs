@@ -11,6 +11,8 @@ namespace RutrackerBot;
 
 public class Handlers
 {
+    private const int MaxTopicsCount = 20;
+
     public static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update,
         CancellationToken cancellationToken)
     {
@@ -34,10 +36,7 @@ public class Handlers
             }
             else
             {
-                await botClient.SendTextMessageAsync(
-                    chatId: chatId,
-                    text: $"Не получилось найти топик: {topicStr}",
-                    cancellationToken: cancellationToken);
+                await SendTextMessage($"Не получилось найти топик: {topicStr}");
             }
 
             return;
@@ -45,11 +44,7 @@ public class Handlers
 
         if (messageText.StartsWith("/start"))
         {
-            await botClient.SendTextMessageAsync(
-                chatId: chatId,
-                text: $"Напиши мне что хочешь найти",
-                cancellationToken: cancellationToken);
-
+            await SendTextMessage($"Напиши мне что хочешь найти");
             return;
         }
 
@@ -63,7 +58,7 @@ public class Handlers
 
         var resp = await client.SearchTopics(req, cancellationToken);
         var sb = new StringBuilder();
-        foreach (var topic in resp.Topics.Take(15))
+        foreach (var topic in resp.Topics.Take(MaxTopicsCount))
         {
             sb.AppendLine($"{topic.Title} | {topic.Author?.Name} | {topic.TopicStatus}");
             sb.AppendLine(
@@ -86,14 +81,29 @@ public class Handlers
 
             sb.AppendLine($"Размер: {sizeText}");
             sb.AppendLine($"/download@{topic.Id}\n");
+
+            if (sb.Length > 3000)
+            {
+                await SendTextMessage(
+                    $"*Найдено {resp.Found} топиков, отображается первые {MaxTopicsCount} по сидам*\n\n{EscapeString(sb.ToString())}");
+                sb.Clear();
+            }
         }
 
-        await botClient.SendTextMessageAsync(
-            chatId: chatId,
-            text: $"*Найдено {resp.Found} топиков*\n\n{EscapeString(sb.ToString())}",
-            parseMode: ParseMode.MarkdownV2,
-            cancellationToken: cancellationToken);
+        if (sb.Length > 0)
+            await SendTextMessage(
+                $"*Найдено {resp.Found} топиков, отображается первые {MaxTopicsCount} по сидам*\n\n{EscapeString(sb.ToString())}");
+
+        async Task SendTextMessage(string localText)
+        {
+            await botClient.SendTextMessageAsync(
+                chatId: chatId,
+                text: localText,
+                parseMode: ParseMode.MarkdownV2,
+                cancellationToken: cancellationToken);
+        }
     }
+
 
     private static string EscapeString(string input)
     {
